@@ -1,0 +1,8 @@
+<div>Out: <span id="out">Check Console</span></div>
+
+<script>
+const file = "testing.wasm";
+WebAssembly.instantiateStreaming(fetch("c compiler/" + file)).then(obj => {
+	document.getElementById("out").innerHTML = obj.instance.exports.main();
+});
+</script>
