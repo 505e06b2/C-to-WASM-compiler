@@ -12,7 +12,7 @@ class myHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-type", "text/html")
             self.end_headers()
-            with open("serverfiles/index.html") as f:
+            with open("index.html") as f:
                 self.wfile.write(f.read())
         else:
             path = urllib.unquote(self.path[1:])
@@ -30,9 +30,9 @@ class myHandler(BaseHTTPRequestHandler):
 
 try:
     server = HTTPServer(("", PORT_NUMBER), myHandler)
-    print "Started httpserver on port:" , PORT_NUMBER
+    print("Started httpserver on port:" , PORT_NUMBER)
     server.serve_forever()
 
 except KeyboardInterrupt:
-    print "^C received, shutting down the web server"
+    print("^C received, shutting down the web server")
     server.socket.close()

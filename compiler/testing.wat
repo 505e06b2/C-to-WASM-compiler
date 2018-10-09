@@ -5,7 +5,7 @@
 
 	(func $main (result i32)
 		(local $r i32)
-		(call $extra) (set_local $r)
+		(i32.const -1) (i32.const 2) (i32.add) (set_local $r)
 		(return (get_local $r))
 	)
 
