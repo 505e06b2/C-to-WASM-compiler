@@ -8,7 +8,7 @@ int extra() {
 }
 
 int main() {
-	int r = -1 + 2;
+	int r = extra() + 2;
 	return r;
 }
 
@@ -82,7 +82,7 @@ if __name__ == "__main__":
 	output = to_wast()
 	#print output
 	temp_file = "testing.wat"
-	wasm_file = "..\\server\\testing.wasm"
+	wasm_file = "..\\exec\\testing.wasm"
 	with open(temp_file, "w") as f:
 		f.write(output)
 
