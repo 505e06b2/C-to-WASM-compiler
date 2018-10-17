@@ -1,3 +1,6 @@
 @echo off
-call "@compile.bat" "%~1"
-node node_run.js "%~n1.wasm"
+set PATH=%~dp0\..\bin;%PATH%
+cd "%~1"
+wat2wasm main.wat
+node node_run.js main.wasm
+cd ..

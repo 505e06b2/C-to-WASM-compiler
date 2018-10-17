@@ -1,7 +1,6 @@
 (module
 	(memory (export "memory") 1)
-	(global $stacktop (mut i32) (i32.const 0xFFFC)) ;;for alignment, we don't use the "first" 3 bytes
-	(global $scope (mut i32) (i32.const 0))
+	(global $stacktop (mut i32) (i32.const 0x10000)) ;;end of memory: 65536kb
 	
 	(func $stack_alloc (param $size i32) (result i32)
 		(get_global $stacktop)
@@ -30,7 +29,7 @@
 		(call $stack_free)
 	)
 	
-	(func $main (result i32)
+	(func $_main
 		(i32.const 4)
 		(call $stack_alloc)
 		(i32.const 300)
@@ -46,8 +45,7 @@
 		(i32.const 100)
 		(i32.store)
 		
-		(i32.const 4)
-		(call $stack_free) ;;free 100
+		(call $pop) ;;free 100
 		
 		(i32.const 4)
 		(call $stack_free) ;;free 200
@@ -63,7 +61,8 @@
 		(i32.const 333)
 		(i32.store)
 		
-		(get_global $stacktop)
+		(i32.const 555)
+		(call $push)
 	)
-	(export "main" (func $main))
+	(start $_main)
 )
