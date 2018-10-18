@@ -1,6 +1,6 @@
 (module
-	(import "imports" "memory" (memory 1))
 	(import "imports" "puts" (func $_puts (param i32)))
+	(memory (export "memory") 1)
 	(global $stacktop (mut i32) (i32.const 0x10000)) ;;end of memory: 65536kb
 	
 	(func $stack_alloc (param $size i32) (result i32)
@@ -63,5 +63,5 @@
 		(get_local $start_ptr)
 		(call $_puts)
 	)
-	(start $_main)
+	(export "main" (func $_main))
 )

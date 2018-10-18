@@ -1,11 +1,8 @@
 const fs = require("fs");
 const typedArray = new Uint8Array(fs.readFileSync("main.wasm"));
 
-const m = new WebAssembly.Memory({initial: 1});
-const memory8 = new Uint8Array(m.buffer);
-
+var memory8;
 WebAssembly.instantiate(typedArray, {imports: {
-		memory: m,
 		puts: function(ptr) {
 			var string = "";
 			for(; memory8[ptr]; ptr++) {
@@ -14,4 +11,7 @@ WebAssembly.instantiate(typedArray, {imports: {
 			console.log(string);
 		}
 	}
+}).then(result => {
+	memory8 = new Uint8Array(result.instance.exports.memory.buffer);
+	result.instance.exports.main();
 });
