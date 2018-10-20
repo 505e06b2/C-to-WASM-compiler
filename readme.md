@@ -16,4 +16,6 @@ Alter prototype to use/test this assembler
 
 Get C99 lexer/parser working to feed the assembler
 
+Work on some sort of GCC-style preprocessor
+
 Done?
