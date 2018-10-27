@@ -3,10 +3,16 @@ import os, subprocess
 
 text = """
 
+int ptr(int *g) {
+	*g = 222;
+	return 999;
+}
+
 int main() {
 	int z = 60;
 	int x = 100;
 	int y = 200;
+	int a = ptr(&x);
 	return x + y + z;
 }
 
@@ -32,7 +38,7 @@ def checkFuncArgs(args):
 	try:
 		out = ""
 		for p in args.params:
-			out += " (param $%s %s)" % (p.name, types["".join(p.type.type.names)])
+			out += " (param $%s %s)" % (p.name, "i32")
 		return out
 	except AttributeError:
 		return ""
@@ -44,17 +50,22 @@ def checkBinaryOp(op):
 		return "(i32.sub)"
 	return "<FIND OP>"
 
-def checkVariable(expr):
+def checkVariable(expr, misc = None):
 	if isinstance(expr, c_ast.Constant):
 		return "(%s.const %s)" % (types[expr.type], expr.value)
 	elif isinstance(expr, c_ast.FuncCall):
 		return checkFuncCall(expr)
 	elif isinstance(expr, c_ast.ID):
-		return "%s\n \t\t%s" % (local_vars[expr.name], "(i32.load)")
+		return "%s (i32.load)" % (local_vars[expr.name])
 	elif isinstance(expr, c_ast.BinaryOp):
 		return "%s %s %s" % (checkVariable(expr.left), checkVariable(expr.right), checkBinaryOp(expr.op))
 	elif isinstance(expr, c_ast.UnaryOp):
-		if isinstance(expr.expr, c_ast.Constant):
+		if expr.op == "*":
+			#return "(i32.store)"
+			return "ADD THIS FOR POINTERS"
+		elif expr.op == "&":
+			return local_vars[expr.expr.name]
+		elif isinstance(expr.expr, c_ast.Constant):
 			return "(%s.const %s%s)" % (types[expr.expr.type], expr.op, expr.expr.value)
 		return "<FIND UNARY>"
 	else:
@@ -108,25 +119,34 @@ def to_wast():
 """
 	for node in ast.ext:
 		if isinstance(node, c_ast.FuncDef):
-			funcdef = "\t(func $_%s%s%s\n" % (node.decl.type.type.declname, checkFuncArgs(node.decl.type.args), checkReturn(" ".join(node.decl.type.type.type.names)) )
-			funcbody = ""
 			global local_vars
 			local_vars = {}
 			reserve_bytes = 0
+			funcbody = ""
+			funcdef = "\t(func $_%s%s%s\n" % (node.decl.type.type.declname, checkFuncArgs(node.decl.type.args), checkReturn(" ".join(node.decl.type.type.type.names)) )
+			try:
+				for p in node.decl.type.args.params:
+					local_vars[p.name] = "(i32.const %d) (get_local $stack) (i32.add)" % (reserve_bytes)
+					reserve_bytes += 4
+					funcbody += "\t\t%s (get_local $%s) (i32.store);; storing parameter on the stack\n" % (local_vars[p.name], p.name)
+			except AttributeError:
+				pass
 			for item in node.body.block_items:
 				if isinstance(item, c_ast.Return):
 					funcbody += "\t\t%s\n" % checkVariable(item.expr)
 				elif isinstance(item, c_ast.Decl):
 					t = types[" ".join(item.type.type.names)]
-					local_vars[item.name] = "(i32.const %d) (get_local $stack) (i32.add);; Get %s's pointer" % (reserve_bytes, item.name)
+					local_vars[item.name] = "(i32.const %d) (get_local $stack) (i32.add)" % (reserve_bytes)
 					reserve_bytes += 4
 					if item.init:
-						funcbody += "\t\t%s\n" % local_vars[item.name]
-						funcbody += ("\t\t%s;; putting %s into wasm stack\n" % (checkVariable(item.init), item.name))
-						funcbody += "\t\t(i32.store);; storing %s on the stack\n" % (item.name)
+						funcbody += "\t\t%s %s (i32.store);; storing %s on the stack\n" % (local_vars[item.name], checkVariable(item.init), item.name)
 				elif isinstance(item, c_ast.Assignment):
+					funcbody += "\t\t"
 					if item.op == "=":
-						funcbody += "\t\t%s;;load %s from stack\n" % (checkVariable(item.rvalue), item.lvalue.name)
+						if isinstance(item.lvalue, c_ast.UnaryOp) and item.lvalue.op == "*":
+							funcbody += "%s (i32.load) %s (i32.store)\n" % (local_vars[item.lvalue.expr.name], checkVariable(item.rvalue))
+						else:
+							funcbody += "%s %s\n" % (checkVariable(item.rvalue), checkVariable(item.lvalue))
 				else:
 					print ">>> >>> %s" % item
 			out += funcdef + ("\t\t(local $stack i32) (i32.const %s) (call $stack_alloc) (set_local $stack)\n" % reserve_bytes) + funcbody + "\t)\n\n"

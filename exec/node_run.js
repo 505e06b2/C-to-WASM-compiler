@@ -2,6 +2,7 @@ const fs = require("fs");
 var typedArray = new Uint8Array(fs.readFileSync("testing.wasm"));
 
 var memory8;
+var memory32;
 WebAssembly.instantiate(typedArray, {imports: {
 		puts: function(ptr) {
 			var string = "";
