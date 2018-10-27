@@ -34,7 +34,6 @@ functions = {  #returns int? these are includes
 }
 
 def checkReturn(node):
-	print " ".join(node.decl.type.type.type.names)
 	if " ".join(node.decl.type.type.type.names) != "void":
 		return " (result i32)"
 	return ""
@@ -112,6 +111,12 @@ def to_wast():
 		(i32.add)
 		(set_global $stacktop)
 	)
+	
+	(func $get_ptr (param $location i32) (result i32)
+		(get_local $location)
+		(get_global $stacktop)
+		(i32.add)
+	)
 
 """
 	for node in ast.ext:
@@ -130,7 +135,7 @@ def to_wast():
 				functions[funcname] = True
 			try:
 				for p in node.decl.type.args.params:
-					variables[p.name] = "(i32.const %d) (get_global $stacktop) (i32.add)" % (reserve_bytes)
+					variables[p.name] = "(i32.const %d) (call $get_ptr)" % (reserve_bytes)
 					reserve_bytes += 4
 					funcbody += "\t\t%s (get_local $%s) (i32.store);; storing parameter on the stack\n" % (variables[p.name], p.name)
 			except AttributeError:
@@ -139,7 +144,7 @@ def to_wast():
 				if isinstance(item, c_ast.Return):
 					funcbody += "\t\t%s;; Return\n" % checkVariable(item.expr)
 				elif isinstance(item, c_ast.Decl):
-					variables[item.name] = "(i32.const %d) (get_global $stacktop) (i32.add)" % (reserve_bytes)
+					variables[item.name] = "(i32.const %d) (call $get_ptr)" % (reserve_bytes)
 					reserve_bytes += 4
 					if item.init:
 						funcbody += "\t\t%s %s (i32.store);; storing %s on the stack\n" % (variables[item.name], checkVariable(item.init), item.name)
