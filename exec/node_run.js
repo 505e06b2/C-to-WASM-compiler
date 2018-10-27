@@ -13,7 +13,13 @@ function showlastkilo(memory) {
 	return str;
 }
 
-WebAssembly.instantiate(typedArray, {imports: {
+WebAssembly.instantiate(typedArray, {
+	debug: {
+		viewmemory: function() {
+			console.log(showlastkilo(memory32));
+		}
+	},
+	stdio: {
 		puts: function(ptr) {
 			var string = "";
 			for(; memory8[ptr]; ptr++) {
@@ -26,6 +32,5 @@ WebAssembly.instantiate(typedArray, {imports: {
 	memory8 = new Uint8Array(result.instance.exports.memory.buffer);
 	memory32 = new Uint32Array(result.instance.exports.memory.buffer);
 	const main = result.instance.exports.main();
-	console.log(showlastkilo(memory32));
 	console.log("Returned " + main);
 });
