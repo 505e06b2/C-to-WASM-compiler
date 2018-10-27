@@ -18,12 +18,11 @@
 		(set_global $stacktop)
 	)
 
-	(func $_ptr (param $a i32) (param $b i32) (result i32)
+	(func $_ptr (param $a i32) (param $b i32)
 		(i32.const 8) (call $stack_alloc);; allocate space on the stack
 		(i32.const 0) (get_global $stacktop) (i32.add) (get_local $a) (i32.store);; storing parameter on the stack
 		(i32.const 4) (get_global $stacktop) (i32.add) (get_local $b) (i32.store);; storing parameter on the stack
 		(i32.const 0) (get_global $stacktop) (i32.add) (i32.load) (i32.const 4) (get_global $stacktop) (i32.add) (i32.load) (i32.load) (i32.store);; assigning to pointer location of a
-		(i32.const 0xAABBCCDD);; Return
 		(i32.const 8) (call $stack_free);; free stack reserved previously
 	)
 
@@ -33,9 +32,9 @@
 		(i32.const 4) (get_global $stacktop) (i32.add) (i32.const 0x12345678) (i32.store);; storing x on the stack
 		(i32.const 8) (get_global $stacktop) (i32.add) (i32.const 0xDEADBEEF) (i32.store);; storing y on the stack
 		(call $_view_mem);; calling function view_mem
-		(i32.const 8) (get_global $stacktop) (i32.add) (i32.const 4) (get_global $stacktop) (i32.add) (call $_ptr) (drop);; calling function ptr
+		(i32.const 8) (get_global $stacktop) (i32.add) (i32.const 4) (get_global $stacktop) (i32.add) (call $_ptr);; calling function ptr
 		(call $_view_mem);; calling function view_mem
-		(i32.const 0) (get_global $stacktop) (i32.add) (i32.const 4) (get_global $stacktop) (i32.add) (call $_ptr) (drop);; calling function ptr
+		(i32.const 0) (get_global $stacktop) (i32.add) (i32.const 4) (get_global $stacktop) (i32.add) (call $_ptr);; calling function ptr
 		(call $_view_mem);; calling function view_mem
 		(i32.const 0x00000000);; Return
 		(i32.const 12) (call $stack_free);; free stack reserved previously

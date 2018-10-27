@@ -3,9 +3,8 @@ import os, subprocess
 
 text = """
 
-int ptr(int *a, int *b) {
+void ptr(int *a, int *b) {
 	*a = *b;
-	return 0xAABBCCDD;
 }
 
 int main() {
@@ -35,7 +34,8 @@ functions = {  #returns int? these are includes
 }
 
 def checkReturn(node):
-	if " ".join(node.decl.type.type.type.names) != "":
+	print " ".join(node.decl.type.type.type.names)
+	if " ".join(node.decl.type.type.type.names) != "void":
 		return " (result i32)"
 	return ""
 
