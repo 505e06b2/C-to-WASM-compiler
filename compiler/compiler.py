@@ -3,17 +3,18 @@ import os, subprocess
 
 text = """
 
-int ptr(int *g) {
-	*g = 0xFFFFFFFF;
+int ptr(int *a, int *b) {
+	*a = *b;
 	return 0xAABBCCDD;
 }
 
 int main() {
 	int z = 0xDEADBEEF;
-	int x = 0xDEADBEEF;
+	int x = 0x12345678;
 	int y = 0xDEADBEEF;
-	int a = ptr(&x);
-	return x + y + z;
+	int w = ptr(&y, &x);
+	w = ptr(&z, &x);
+	return 0x00000000;
 }
 
 """
@@ -58,8 +59,7 @@ def checkVariable(expr, misc = None):
 		return "%s %s %s" % (checkVariable(expr.left), checkVariable(expr.right), checkBinaryOp(expr.op))
 	elif isinstance(expr, c_ast.UnaryOp):
 		if expr.op == "*":
-			#return "(i32.store)"
-			return "ADD THIS FOR POINTERS"
+			return "%s (i32.load) (i32.load)" % local_vars[expr.expr.name]
 		elif expr.op == "&":
 			return local_vars[expr.expr.name]
 		elif isinstance(expr.expr, c_ast.Constant):
@@ -129,7 +129,7 @@ def to_wast():
 						if isinstance(item.lvalue, c_ast.UnaryOp) and item.lvalue.op == "*":
 							funcbody += "%s (i32.load) %s (i32.store);; assigning to pointer location\n" % (local_vars[item.lvalue.expr.name], checkVariable(item.rvalue))
 						else:
-							funcbody += "%s %s\n" % (checkVariable(item.rvalue), checkVariable(item.lvalue))
+							funcbody += "%s %s (i32.store)\n" % (local_vars[item.lvalue.name], checkVariable(item.rvalue))
 				else:
 					print ">>> >>> %s" % item
 			out += funcdef + ("\t\t(i32.const %s) (call $stack_alloc);; allocate space on the stack\n" % reserve_bytes) + funcbody + ("\t\t(i32.const %s) (call $stack_free);; free stack reserved previously\n" % reserve_bytes) + "\t)\n\n"
