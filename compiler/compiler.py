@@ -30,6 +30,7 @@ types = {
 variables = {}
 functions = {  #returns int? these are includes
 	"view_mem": False,
+	"dump_mem": False,
 	"puts": False
 }
 
@@ -94,6 +95,7 @@ def to_wast():
 	ast = parser.parse(text, filename='<none>')
 	out = """(module
 	(import "debug" "viewmemory" (func $_view_mem))
+	(import "debug" "dumpmemory" (func $_dump_mem))
 	(import "stdio" "puts" (func $_puts (param i32)))
 	(memory (export "memory") 1)
 	(global $stacktop (mut i32) (i32.const 0x10000)) ;;end of memory: 65536kb
