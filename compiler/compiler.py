@@ -2,24 +2,32 @@ from pycparser import c_parser, c_ast
 import os, subprocess
 
 text = """
-
-void ptr(int *a, int *b) {
-	*a = *b;
+void ptr(int *x, int *y) {
+	*x = *y;
 }
 
 int main() {
 	int z = 0xDEADBEEF;
 	int x = 0x12345678;
 	int y = 0xDEADBEEF;
+	int *memtype = "int";
+	puts(memtype);
 	
-	view_mem();
+	view_mem(memtype);
 	ptr(&y, &x);
-	view_mem();
 	ptr(&z, &x);
-	view_mem();
+	view_mem(memtype);
 	return 0x00000000;
 }
 
+"""
+
+module = """(module
+	(import "debug" "viewmemory" (func $_view_mem (param i32)))
+	(import "debug" "dumpmemory" (func $_dump_mem (param i32)))
+	(import "stdio" "puts"       (func $_puts (param i32)))
+	(memory (export "memory") 1)
+	(global $stacktop (mut i32) (i32.const 0x00010000)) ;;end of memory: 65536 -> 64kb
 """
 
 types = {
@@ -27,7 +35,9 @@ types = {
 	"unsigned int" : {"unsigned": True, "size": 4},
 }
 
-variables = {}
+data_pointer = 0x0004 #start after null
+global_scope = {}
+current_scope = {}
 functions = {  #returns int? these are includes
 	"view_mem": False,
 	"dump_mem": False,
@@ -57,18 +67,26 @@ def checkBinaryOp(op):
 
 def checkVariable(expr, misc = None):
 	if isinstance(expr, c_ast.Constant):
+		if expr.type == "string":
+			global module
+			global data_pointer
+			module += "\t(data (i32.const 0x%08x) %s)\n" % (data_pointer, expr.value)
+			old_ptr = data_pointer
+			data_pointer += len(expr.value)-1 #it looks like "test": in C it's len of 5, in here, it's len of 6
+			return "(i32.const 0x%08x)" % (old_ptr)
 		return "(i32.const %s)" % (expr.value)
+			
 	elif isinstance(expr, c_ast.FuncCall):
 		return checkFuncCall(expr)
 	elif isinstance(expr, c_ast.ID):
-		return "%s (i32.load)" % (variables[expr.name])
+		return "%s (i32.load)" % (current_scope[expr.name])
 	elif isinstance(expr, c_ast.BinaryOp):
 		return "%s %s %s" % (checkVariable(expr.left), checkVariable(expr.right), checkBinaryOp(expr.op))
 	elif isinstance(expr, c_ast.UnaryOp):
 		if expr.op == "*":
-			return "%s (i32.load) (i32.load)" % variables[expr.expr.name]
+			return "%s (i32.load) (i32.load)" % current_scope[expr.expr.name]
 		elif expr.op == "&":
-			return variables[expr.expr.name]
+			return current_scope[expr.expr.name]
 		elif isinstance(expr.expr, c_ast.Constant):
 			return "(i32.const %s%s)" % (expr.op, expr.expr.value)
 		return "<FIND UNARY>"
@@ -93,13 +111,8 @@ def checkFuncNeedsDrop(func):
 def to_wast():
 	parser = c_parser.CParser()
 	ast = parser.parse(text, filename='<none>')
-	out = """(module
-	(import "debug" "viewmemory" (func $_view_mem))
-	(import "debug" "dumpmemory" (func $_dump_mem))
-	(import "stdio" "puts" (func $_puts (param i32)))
-	(memory (export "memory") 1)
-	(global $stacktop (mut i32) (i32.const 0x10000)) ;;end of memory: 65536kb
-
+	
+	funcs = """
 	(func $stack_alloc (param $size i32)
 		(get_global $stacktop)
 		(get_local $size)
@@ -123,8 +136,8 @@ def to_wast():
 """
 	for node in ast.ext:
 		if isinstance(node, c_ast.FuncDef):
-			global variables
-			variables = {}
+			global current_scope
+			current_scope = {}
 			reserve_bytes = 0
 			funcbody = ""
 			
@@ -137,35 +150,35 @@ def to_wast():
 				functions[funcname] = True
 			try:
 				for p in node.decl.type.args.params:
-					variables[p.name] = "(i32.const %d) (call $get_ptr)" % (reserve_bytes)
+					current_scope[p.name] = "(i32.const %d) (call $get_ptr)" % (reserve_bytes)
 					reserve_bytes += 4
-					funcbody += "\t\t%s (get_local $%s) (i32.store);; storing parameter on the stack\n" % (variables[p.name], p.name)
+					funcbody += "\t\t%s (get_local $%s) (i32.store);; storing parameter on the stack\n" % (current_scope[p.name], p.name)
 			except AttributeError:
 				pass
 			for item in node.body.block_items:
 				if isinstance(item, c_ast.Return):
 					funcbody += "\t\t%s;; Return\n" % checkVariable(item.expr)
 				elif isinstance(item, c_ast.Decl):
-					variables[item.name] = "(i32.const %d) (call $get_ptr)" % (reserve_bytes)
+					current_scope[item.name] = "(i32.const %d) (call $get_ptr)" % (reserve_bytes)
 					reserve_bytes += 4
 					if item.init:
-						funcbody += "\t\t%s %s (i32.store);; storing %s on the stack\n" % (variables[item.name], checkVariable(item.init), item.name)
+						funcbody += "\t\t%s %s (i32.store);; storing %s on the stack\n" % (current_scope[item.name], checkVariable(item.init), item.name)
 				elif isinstance(item, c_ast.Assignment):
 					funcbody += "\t\t"
 					if item.op == "=":
 						if isinstance(item.lvalue, c_ast.UnaryOp) and item.lvalue.op == "*":
-							funcbody += "%s (i32.load) %s (i32.store);; assigning to pointer location of %s\n" % (variables[item.lvalue.expr.name], checkVariable(item.rvalue), item.lvalue.expr.name)
+							funcbody += "%s (i32.load) %s (i32.store);; assigning to pointer location of %s\n" % (current_scope[item.lvalue.expr.name], checkVariable(item.rvalue), item.lvalue.expr.name)
 						else:
-							funcbody += "%s %s (i32.store)\n" % (variables[item.lvalue.name], checkVariable(item.rvalue))
+							funcbody += "%s %s (i32.store)\n" % (current_scope[item.lvalue.name], checkVariable(item.rvalue))
 				elif isinstance(item, c_ast.FuncCall):
-					funcbody += "\t\t%s%s;; calling function %s\n" % (checkFuncCall(item), checkFuncNeedsDrop(item), item.name.name)
+					funcbody += "\t\t%s%s;; calling function _%s\n" % (checkFuncCall(item), checkFuncNeedsDrop(item), item.name.name)
 				else:
 					print ">>> >>> %s" % item
-			out += funcdef + ("\t\t(i32.const %s) (call $stack_alloc);; allocate space on the stack\n" % reserve_bytes) + funcbody + ("\t\t(i32.const %s) (call $stack_free);; free stack reserved previously\n" % reserve_bytes) + "\t)\n\n"
+			funcs += funcdef + ("\t\t(i32.const %s) (call $stack_alloc);; allocate space on the stack\n" % reserve_bytes) + funcbody + ("\t\t(i32.const %s) (call $stack_free);; free stack reserved previously\n" % reserve_bytes) + "\t)\n\n"
 		else:
 			print ">>> %s" % node
-	out += "\t(export \"main\" (func $_main))\n)\n" #close module
-	return out
+	funcs += "\t(export \"main\" (func $_main))\n)\n" #close module
+	return module + funcs
 
 
 if __name__ == "__main__":
@@ -174,6 +187,13 @@ if __name__ == "__main__":
 	temp_file = "testing.wat"
 	wasm_file = "..\\exec\\testing.wasm"
 	with open(temp_file, "w") as f:
+		f.write(";; ====== C ====== ;;\n")
+		for x in text.splitlines():
+			if x != "":
+				f.write(";; " + x + "\n")
+			else:
+				f.write("\n")
+		f.write(";; ====== wabt ====== ;;\n\n")
 		f.write(output)
 
 	if os.path.exists(wasm_file): os.remove(wasm_file)

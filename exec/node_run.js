@@ -17,38 +17,42 @@ function formattedMemoryDump(type, bytes = 256) {
 	var str = memoryDisplay[type].heading;
 	var offset = ((memory[type].length * memoryDisplay[type].sizeof) //to bytes
 	             - bytes) / memoryDisplay[type].sizeof; //back to proper size
-	var displayoffset = memory[type].length * memoryDisplay[type].sizeof - bytes;
+	var offsetdisplay = memory[type].length * memoryDisplay[type].sizeof - bytes;
 	for(var y = 0; y < bytes / 16; y++) {
-		str += (displayoffset).toString(16).padStart(8, "0") + " | ";
+		str += (offsetdisplay).toString(16).padStart(8, "0") + " | ";
 		for(var x = 0, xe = 16 / memoryDisplay[type].sizeof; x < xe; x++, offset++) {
 			str += memory[type][offset].toString(16).padStart(memoryDisplay[type].sizeof*2, "0") + " ";
 		}
 		str += "\n";
-		displayoffset += 16;
+		offsetdisplay += 16;
 	}
 	return str;
 }
 
-const memorytype = "int";
 var dumpindex = 0;
+var toString = function(ptr) {
+	var string = "";
+	for(; memory.char[ptr]; ptr++) {
+		string += String.fromCharCode(memory.char[ptr]);			
+	}
+	return string;
+}
+
 WebAssembly.instantiate(typedArray, {
 	debug: {
-		viewmemory: function() {
-			console.log(formattedMemoryDump(memorytype));
+		viewmemory: function(ptr) {
+			console.log(formattedMemoryDump(toString(ptr)));
 		},
-		dumpmemory: function() {
-			fs.writeFileSync("memory" + dumpindex + ".txt", formattedMemoryDump(memorytype, memory[memorytype].length * memoryDisplay[memorytype].sizeof));
+		dumpmemory: function(ptr) {
+			const type = toString(ptr);
+			fs.writeFileSync("memory" + dumpindex + ".txt", formattedMemoryDump(type, memory[type].length * memoryDisplay[type].sizeof));
 			console.log(">>> Written memory to \"memory" + dumpindex + ".txt\"");
 			dumpindex++;
 		}
 	},
 	stdio: {
 		puts: function(ptr) {
-			var string = "";
-			for(; memory.char[ptr]; ptr++) {
-				string += String.fromCharCode(memory.char[ptr]);			
-			}
-			console.log(string);
+			console.log(toString(ptr));
 		}
 	}
 }).then(result => {
