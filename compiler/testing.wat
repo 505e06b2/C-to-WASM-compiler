@@ -1,20 +1,10 @@
 ;; ====== C ====== ;;
 
-;; void ptr(int *x, int *y) {
-;; 	*x = *y;
-;; }
-
 ;; int main() {
-;; 	int z = 0xDEADBEEF;
-;; 	int x = 0x12345678;
-;; 	int y = 0xDEADBEEF;
-;; 	int *memtype = "int";
-;; 	puts(memtype);
-;; 	
-;; 	view_mem(memtype);
-;; 	ptr(&y, &x);
-;; 	ptr(&z, &x);
-;; 	view_mem(memtype);
+;; 	int a = 0;
+;; 	short *b = &a;
+;; 	*b = -1;
+;; 	view_mem("int");
 ;; 	return 0x00000000;
 ;; }
 
@@ -48,27 +38,14 @@
 		(i32.add)
 	)
 
-	(func $_ptr (param $x i32) (param $y i32)
-		(i32.const 8) (call $stack_alloc);; allocate space on the stack
-		(i32.const 0) (call $get_ptr) (get_local $x) (i32.store);; storing parameter on the stack
-		(i32.const 4) (call $get_ptr) (get_local $y) (i32.store);; storing parameter on the stack
-		(i32.const 0) (call $get_ptr) (i32.load) (i32.const 4) (call $get_ptr) (i32.load) (i32.load) (i32.store);; assigning to pointer location of x
-		(i32.const 8) (call $stack_free);; free stack reserved previously
-	)
-
 	(func $_main (result i32)
-		(i32.const 16) (call $stack_alloc);; allocate space on the stack
-		(i32.const 0) (call $get_ptr) (i32.const 0xDEADBEEF) (i32.store);; storing z on the stack
-		(i32.const 4) (call $get_ptr) (i32.const 0x12345678) (i32.store);; storing x on the stack
-		(i32.const 8) (call $get_ptr) (i32.const 0xDEADBEEF) (i32.store);; storing y on the stack
-		(i32.const 12) (call $get_ptr) (i32.const 0x00000004) (i32.store);; storing memtype on the stack
-		(i32.const 12) (call $get_ptr) (i32.load) (call $_puts);; calling function _puts
-		(i32.const 12) (call $get_ptr) (i32.load) (call $_view_mem);; calling function _view_mem
-		(i32.const 8) (call $get_ptr) (i32.const 4) (call $get_ptr) (call $_ptr);; calling function _ptr
-		(i32.const 0) (call $get_ptr) (i32.const 4) (call $get_ptr) (call $_ptr);; calling function _ptr
-		(i32.const 12) (call $get_ptr) (i32.load) (call $_view_mem);; calling function _view_mem
+		(i32.const 8) (call $stack_alloc);; allocate space on the stack
+		(i32.const 0) (call $get_ptr) (i32.const 0) (i32.store);; storing a on the stack
+		(i32.const 4) (call $get_ptr) (i32.const 0) (call $get_ptr) (i32.store);; storing b on the stack
+		(i32.const 4) (call $get_ptr) (i32.load) (i32.const -1) (i32.store16);; assigning to pointer location of b
+		(i32.const 0x00000004) (call $_view_mem);; calling function _view_mem
 		(i32.const 0x00000000);; Return
-		(i32.const 16) (call $stack_free);; free stack reserved previously
+		(i32.const 8) (call $stack_free);; free stack reserved previously
 	)
 
 	(export "main" (func $_main))

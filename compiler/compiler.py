@@ -2,21 +2,11 @@ from pycparser import c_parser, c_ast
 import os, subprocess
 
 text = """
-void ptr(int *x, int *y) {
-	*x = *y;
-}
-
 int main() {
-	int z = 0xDEADBEEF;
-	int x = 0x12345678;
-	int y = 0xDEADBEEF;
-	int *memtype = "int";
-	puts(memtype);
-	
-	view_mem(memtype);
-	ptr(&y, &x);
-	ptr(&z, &x);
-	view_mem(memtype);
+	int a = 0;
+	short *b = &a;
+	*b = -1;
+	view_mem("int");
 	return 0x00000000;
 }
 
@@ -31,8 +21,10 @@ module = """(module
 """
 
 types = {
-	"int": {"unsigned": False, "size": 4},
-	"unsigned int" : {"unsigned": True, "size": 4},
+	"ptr":   {"load": "",     "store": "",   "size": 4},
+	"int":   {"load": "",     "store": "",   "size": 4},
+	"short": {"load": "16_s", "store": "16", "size": 2},
+	"char":  {"load": "8_s" , "store": "8",  "size": 1}
 }
 
 data_pointer = 0x0004 #start after null
@@ -79,14 +71,14 @@ def checkVariable(expr, misc = None):
 	elif isinstance(expr, c_ast.FuncCall):
 		return checkFuncCall(expr)
 	elif isinstance(expr, c_ast.ID):
-		return "%s (i32.load)" % (current_scope[expr.name])
+		return "%s (i32.load%s)" % (current_scope[expr.name]["ptr"], types[current_scope[expr.name]["type"]]["load"])
 	elif isinstance(expr, c_ast.BinaryOp):
 		return "%s %s %s" % (checkVariable(expr.left), checkVariable(expr.right), checkBinaryOp(expr.op))
 	elif isinstance(expr, c_ast.UnaryOp):
 		if expr.op == "*":
-			return "%s (i32.load) (i32.load)" % current_scope[expr.expr.name]
+			return "%s (i32.load) (i32.load%s)" % (current_scope[expr.expr.name]["ptr"], types[current_scope[expr.expr.name]["type"]]["load"])
 		elif expr.op == "&":
-			return current_scope[expr.expr.name]
+			return current_scope[expr.expr.name]["ptr"]
 		elif isinstance(expr.expr, c_ast.Constant):
 			return "(i32.const %s%s)" % (expr.op, expr.expr.value)
 		return "<FIND UNARY>"
@@ -108,6 +100,14 @@ def checkFuncNeedsDrop(func):
 		return " (drop)"
 	return ""
 
+def determineType(item, decl):
+	if isinstance(item.type, c_ast.PtrDecl):
+		decl["type"] = "ptr"
+		decl["ptrto"] = " ".join(item.type.type.type.names)
+		return
+	
+	decl["type"] = " ".join(item.type.type.names)
+	
 def to_wast():
 	parser = c_parser.CParser()
 	ast = parser.parse(text, filename='<none>')
@@ -150,26 +150,28 @@ def to_wast():
 				functions[funcname] = True
 			try:
 				for p in node.decl.type.args.params:
-					current_scope[p.name] = "(i32.const %d) (call $get_ptr)" % (reserve_bytes)
+					current_scope[p.name] = {"ptr": "(i32.const %d) (call $get_ptr)" % (reserve_bytes)}
+					determineType(p, current_scope[p.name])
 					reserve_bytes += 4
-					funcbody += "\t\t%s (get_local $%s) (i32.store);; storing parameter on the stack\n" % (current_scope[p.name], p.name)
+					funcbody += "\t\t%s (get_local $%s) (i32.store%s);; storing parameter on the stack\n" % (current_scope[p.name]["ptr"], p.name, types[current_scope[p.name]["type"]]["store"])
 			except AttributeError:
 				pass
 			for item in node.body.block_items:
 				if isinstance(item, c_ast.Return):
 					funcbody += "\t\t%s;; Return\n" % checkVariable(item.expr)
 				elif isinstance(item, c_ast.Decl):
-					current_scope[item.name] = "(i32.const %d) (call $get_ptr)" % (reserve_bytes)
+					current_scope[item.name] = {"ptr": "(i32.const %d) (call $get_ptr)" % (reserve_bytes)}
+					determineType(item, current_scope[item.name])
 					reserve_bytes += 4
 					if item.init:
-						funcbody += "\t\t%s %s (i32.store);; storing %s on the stack\n" % (current_scope[item.name], checkVariable(item.init), item.name)
+						funcbody += "\t\t%s %s (i32.store%s);; storing %s on the stack\n" % (current_scope[item.name]["ptr"], checkVariable(item.init), types[current_scope[item.name]["type"]]["store"], item.name)
 				elif isinstance(item, c_ast.Assignment):
 					funcbody += "\t\t"
 					if item.op == "=":
 						if isinstance(item.lvalue, c_ast.UnaryOp) and item.lvalue.op == "*":
-							funcbody += "%s (i32.load) %s (i32.store);; assigning to pointer location of %s\n" % (current_scope[item.lvalue.expr.name], checkVariable(item.rvalue), item.lvalue.expr.name)
+							funcbody += "%s (i32.load) %s (i32.store%s);; assigning to pointer location of %s\n" % (current_scope[item.lvalue.expr.name]["ptr"], checkVariable(item.rvalue), types[current_scope[item.lvalue.expr.name]["ptrto"]]["store"], item.lvalue.expr.name)
 						else:
-							funcbody += "%s %s (i32.store)\n" % (current_scope[item.lvalue.name], checkVariable(item.rvalue))
+							funcbody += "%s %s (i32.store)\n" % (current_scope[item.lvalue.name]["ptr"], checkVariable(item.rvalue))
 				elif isinstance(item, c_ast.FuncCall):
 					funcbody += "\t\t%s%s;; calling function _%s\n" % (checkFuncCall(item), checkFuncNeedsDrop(item), item.name.name)
 				else:

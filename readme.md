@@ -1,4 +1,3 @@
-
 # wasmcc - A C to WASM bytecode compiler
 
 ## What will the end product look like?
@@ -6,13 +5,26 @@ It will be a self contained .js file that will contain the entire WASM bytecode 
 
 ## Goals:
 
-Get Python prototype transpiler complete <=== Current Target
-* [ ] typing (other than int)
+Get Python feature-complete compiler finished <=== Current Target
+* [ ] type checks at compile time
+* * [x] int
+* * [x] char
+* * [x] short
+* * [ ] unsigned types
 * [ ] if statements
-* [ ] for/while loops
-* [ ] block scopes (only functions have their own scope atm)
+* [ ] loops
+* * [ ] for
+* * [ ] while
+* [ ] scopes
+* * [x] functions
+* * [ ] if
+* * [ ] blocks (manual)
+* * [ ] loops
 * [x] functions with params/returns
-* [x] pointers
+* [ ] pointers
+* * [x] variables
+* * [ ] functions
+* [x] string literals
 * [ ] Inline JS (for importing functions)
 * [ ] Inline WASM (for optimisation)
 
