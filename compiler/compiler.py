@@ -3,8 +3,8 @@ import os, subprocess
 
 text = """
 int main() {
-	int a = 0;
-	short *b = &a;
+	unsigned int a = 0;
+	unsigned short *b = &a;
 	*b = -1;
 	view_mem("int");
 	return 0x00000000;
@@ -21,10 +21,13 @@ module = """(module
 """
 
 types = {
-	"ptr":   {"load": "",     "store": "",   "size": 4},
-	"int":   {"load": "",     "store": "",   "size": 4},
-	"short": {"load": "16_s", "store": "16", "size": 2},
-	"char":  {"load": "8_s" , "store": "8",  "size": 1}
+	"ptr":            {"load": "",     "store": "",   "size": 4},
+	"int":            {"load": "",     "store": "",   "size": 4},
+	"unsigned int":   {"load": "",     "store": "",   "size": 4},
+	"short":          {"load": "16_s", "store": "16", "size": 2},
+	"unsigned short": {"load": "16_u", "store": "16", "size": 2},
+	"char":           {"load": "8_s" , "store": "8",  "size": 1},
+	"unsigned char":  {"load": "8_u" , "store": "8",  "size": 1}
 }
 
 data_pointer = 0x0004 #start after null

@@ -1,8 +1,8 @@
 ;; ====== C ====== ;;
 
 ;; int main() {
-;; 	int a = 0;
-;; 	short *b = &a;
+;; 	unsigned int a = 0;
+;; 	unsigned short *b = &a;
 ;; 	*b = -1;
 ;; 	view_mem("int");
 ;; 	return 0x00000000;
