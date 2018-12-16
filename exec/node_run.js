@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 const fs = require("fs");
 var typedArray = new Uint8Array(fs.readFileSync("testing.wasm"));
 

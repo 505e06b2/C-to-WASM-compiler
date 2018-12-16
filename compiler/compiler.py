@@ -1,5 +1,6 @@
+#!/usr/bin/env python2
 from pycparser import c_parser, c_ast
-import os, subprocess
+import os, subprocess, sys
 
 text = """
 int main() {
@@ -52,7 +53,7 @@ def checkFuncArgs(node):
 		return out
 	except AttributeError:
 		return ""
-	
+
 def checkBinaryOp(op):
 	if op == "+":
 		return "(i32.add)"
@@ -70,7 +71,7 @@ def checkVariable(expr, misc = None):
 			data_pointer += len(expr.value)-1 #it looks like "test": in C it's len of 5, in here, it's len of 6
 			return "(i32.const 0x%08x)" % (old_ptr)
 		return "(i32.const %s)" % (expr.value)
-			
+
 	elif isinstance(expr, c_ast.FuncCall):
 		return checkFuncCall(expr)
 	elif isinstance(expr, c_ast.ID):
@@ -88,7 +89,7 @@ def checkVariable(expr, misc = None):
 	else:
 		print expr
 		return "<FIND>"
-		
+
 def checkFuncCall(func):
 	out = ""
 	try:
@@ -97,7 +98,7 @@ def checkFuncCall(func):
 	except AttributeError:
 		pass
 	return out + ("(call $_%s)" % func.name.name)
-	
+
 def checkFuncNeedsDrop(func):
 	if functions[func.name.name]:
 		return " (drop)"
@@ -108,13 +109,13 @@ def determineType(item, decl):
 		decl["type"] = "ptr"
 		decl["ptrto"] = " ".join(item.type.type.type.names)
 		return
-	
+
 	decl["type"] = " ".join(item.type.type.names)
-	
+
 def to_wast():
 	parser = c_parser.CParser()
 	ast = parser.parse(text, filename='<none>')
-	
+
 	funcs = """
 	(func $stack_alloc (param $size i32)
 		(get_global $stacktop)
@@ -129,7 +130,7 @@ def to_wast():
 		(i32.add)
 		(set_global $stacktop)
 	)
-	
+
 	(func $get_ptr (param $location i32) (result i32)
 		(get_local $location)
 		(get_global $stacktop)
@@ -143,7 +144,7 @@ def to_wast():
 			current_scope = {}
 			reserve_bytes = 0
 			funcbody = ""
-			
+
 			funcname = node.decl.type.type.declname
 			funcret = checkReturn(node)
 			funcdef = "\t(func $_%s%s%s\n" % (funcname, checkFuncArgs(node), funcret)
@@ -156,7 +157,9 @@ def to_wast():
 					current_scope[p.name] = {"ptr": "(i32.const %d) (call $get_ptr)" % (reserve_bytes)}
 					determineType(p, current_scope[p.name])
 					reserve_bytes += 4
-					funcbody += "\t\t%s (get_local $%s) (i32.store%s);; storing parameter on the stack\n" % (current_scope[p.name]["ptr"], p.name, types[current_scope[p.name]["type"]]["store"])
+					funcbody += "\t\t%s (get_local $%s) (i32.store%s);; storing parameter on the stack\n" % (
+						current_scope[p.name]["ptr"], p.name, types[current_scope[p.name]["type"]]["store"]
+					)
 			except AttributeError:
 				pass
 			for item in node.body.block_items:
@@ -167,12 +170,17 @@ def to_wast():
 					determineType(item, current_scope[item.name])
 					reserve_bytes += 4
 					if item.init:
-						funcbody += "\t\t%s %s (i32.store%s);; storing %s on the stack\n" % (current_scope[item.name]["ptr"], checkVariable(item.init), types[current_scope[item.name]["type"]]["store"], item.name)
+						funcbody += "\t\t%s %s (i32.store%s);; storing %s on the stack\n" % (
+							current_scope[item.name]["ptr"], checkVariable(item.init), types[current_scope[item.name]["type"]]["store"], item.name
+						)
+
 				elif isinstance(item, c_ast.Assignment):
 					funcbody += "\t\t"
 					if item.op == "=":
 						if isinstance(item.lvalue, c_ast.UnaryOp) and item.lvalue.op == "*":
-							funcbody += "%s (i32.load) %s (i32.store%s);; assigning to pointer location of %s\n" % (current_scope[item.lvalue.expr.name]["ptr"], checkVariable(item.rvalue), types[current_scope[item.lvalue.expr.name]["ptrto"]]["store"], item.lvalue.expr.name)
+							funcbody += "%s (i32.load) %s (i32.store%s);; assigning to pointer location of %s\n" % (
+								current_scope[item.lvalue.expr.name]["ptr"], checkVariable(item.rvalue), types[current_scope[item.lvalue.expr.name]["ptrto"]]["store"], item.lvalue.expr.name
+							)
 						else:
 							funcbody += "%s %s (i32.store)\n" % (current_scope[item.lvalue.name]["ptr"], checkVariable(item.rvalue))
 				elif isinstance(item, c_ast.FuncCall):
@@ -188,9 +196,17 @@ def to_wast():
 
 if __name__ == "__main__":
 	output = to_wast()
-	#print output
+
+	os.chdir(os.path.dirname(os.path.realpath(__file__)))
+
 	temp_file = "testing.wat"
-	wasm_file = "..\\exec\\testing.wasm"
+
+	try:
+		wasm_file = sys.argv[1]
+		print "Writing wasm to argv[1]"
+	except IndexError:
+		wasm_file = "../exec/testing.wasm"
+
 	with open(temp_file, "w") as f:
 		f.write(";; ====== C ====== ;;\n")
 		for x in text.splitlines():
@@ -203,5 +219,5 @@ if __name__ == "__main__":
 
 	if os.path.exists(wasm_file): os.remove(wasm_file)
 
-	subprocess.call("to_wasm.bat %s %s" % (temp_file, wasm_file), shell=True)
+	subprocess.call(["../bin/wat2wasm", temp_file, "-o", wasm_file])
 

@@ -31,7 +31,7 @@
 		(i32.add)
 		(set_global $stacktop)
 	)
-	
+
 	(func $get_ptr (param $location i32) (result i32)
 		(get_local $location)
 		(get_global $stacktop)
